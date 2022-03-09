@@ -111,7 +111,6 @@ class Network:
 #for _ in range(2):
 #    resp = Block.query_block_hash_only(start_nonce)
 #    start_nonce += 1
-#    print(resp)
 
 if __name__ == '__main__':
     print('Class file. Do not run directly!')

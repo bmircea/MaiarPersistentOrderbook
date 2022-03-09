@@ -2,7 +2,6 @@ from multiprocessing import Process, Queue, sharedctypes, Pipe, Barrier
 import multiprocessing
 from request import Network, Block, Transaction
 import ctypes
-import numpy
 
 NUM_PROC = 9
 
