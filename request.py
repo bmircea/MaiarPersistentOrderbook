@@ -2,116 +2,76 @@ import requests
 import json
 import time
 import smart_contract_addresses
+import base64
 
-class Transaction:
-    tx_hash = ''
-    def __init__(self, hash):
-        self.tx_hash = hash
-        print('Transaction created', hash)
 
+
+class Helper(object):
+    GET_TX_BY_HASH_URL = 'https://gateway.elrond.com/transaction/{0}?withResults=True'
+    GET_BLOCK_BY_NONCE_URL = 'https://gateway.elrond.com/block/{0}/by-nonce/{1}?withTxs=True'
+    
     @classmethod
-    def get_tx_by_hash(self):
-        get_tx_by_hash_url = 'https://gateway.elrond.com/transaction/{0}'
-        r = requests.get(get_tx_by_hash_url.format(self.tx_hash))
+    def getTxByHash(self, hash):
+        r = requests.get(self.GET_TX_BY_HASH_URL.format(hash))
         if (r.status_code == 200):
             pass
 
-        
-
-class Block:
-    block_hash = ''
-    block_nonce = 0
-    txs_num = ''
-    txs = []
-    sc_address_list = smart_contract_addresses.smart_contracts.values()
-
-    def __init__(self, json_dump):
-        response = json.loads(json_dump)
-        if (response['code'] == 'successful'):
-            data = response['data']
-            self.block_hash = data['block']['hash']
-            self.txs_num = data['block']['numTxs']
-            self.block_nonce = data['block']['nonce']
-            Block.get_txs_hash_only(self.txs, data['block']['miniBlocks'])
-            #print('Created block')
-    
-    @staticmethod
-    def query_block_hash_only(nonce):
-        get_block_by_nonce_url = 'https://gateway.elrond.com/block/{0}/by-nonce/{1}?withTxs=True'
+    @classmethod
+    def queryBlockHashOnly(self, nonce):
         tx_list = []
         for i in range(3):
-            r = requests.get(get_block_by_nonce_url.format(str(i), str(nonce)))
+            r = requests.get(self.GET_BLOCK_BY_NONCE_URL.format(str(i), str(nonce)))
             if (r.status_code == 200):
                 resp = json.loads(r.text)
                 if (resp['code'] == 'successful'):
                     mb = resp['data']['block']['miniBlocks']
-                    for item in Block.query_txs_hash_only(mb):
+                    for item in Helper.queryTxsHashOnly(mb):
                         tx_list.append(item)
             time.sleep(0.1)
         return tx_list
 
     @staticmethod
-    def query_txs_hash_only(miniblocks):  # Only get the hash of the transactions
+    def queryTxsHashOnly(miniblocks):  # Only get the hash of the transactions
         hash_list = []
         for block in miniblocks:                 # from blocks. Need to filter afterwards.
             for tx in block['transactions']:
                 hash_list.append((tx['hash'], tx['receiver']))
-        return Block.filter_txs(hash_list)
+        return Helper.filterTxs(hash_list)
 
-    @classmethod
-    def filter_txs(self, hash_list):    # Filter txs by receiver (smart contracts only)
-        sc_address_list = self.sc_address_list 
+    @staticmethod
+    def filterTxs(hash_list):    # Filter txs by receiver (smart contracts only)
+        sc_address_list = smart_contract_addresses.smart_contracts.values()
         tx_list = []
         for hash in hash_list:
             if hash[1] in sc_address_list:
                 tx_list.append(hash[0])
         return tx_list
-    """
-    def __init__(self, json_dump):
-        response = json.loads(json_dump)
-        if (response['code'] == 'successful'):
-            data = response['data']
-            self.block_nonce = data['block']['nonce']
-            self.block_hash = data['block']['hash']
-            self.txs_num = data['block']['numTxs']
-            Block.get_txs(self.txs, data['block']['miniBlocks'])
-            print('Created block')
 
     @staticmethod
-    def get_txs(tx_list, miniblocks):
-        #txs = miniblocks['transactions']
-        for block in miniblocks:
-            for tx in block['transactions']:
-                (print(json.dumps(tx, indent=4)))
+    def workOnNonce(nonce_queue, response_queue):
+        nonce = nonce_queue.get()
+        while nonce is not None:
+            response = Helper.queryBlockHashOnly(nonce)
+            if len(response) > 0:
+                for item in response:
+                    response_queue.put(item)
+            nonce = nonce_queue.get()
+        response_queue.put(None)
+
+    @staticmethod
+    def decode(data):
+        # Decode 'data' string from tx - ESDTTransfer@A@B
+        # where A - Asset name (string) hex-encoded
+        # and B - Asset qty (BigUInt) hex-encoded 
+
+        action, asset, qty = data.split('@')
+        qty = int(qty, 16) # Hex to Dec 
+        asset = bytes.fromhex(asset).decode('ascii') # Hex to String
         
+        print(action, asset, qty)
 
-    @staticmethod
-    def query_blocks(blocks_list, start_nonce):
-        get_block_by_nonce_url = 'https://gateway.elrond.com/block/{0}/by-nonce/{1}?withTxs=True'
-        nonce = start_nonce
-        for _ in range(1):
-            for i in range(3):
-                r = requests.get(get_block_by_nonce_url.format(str(i), str(nonce)))
-                if (r.status_code == 200):
-                    blocks_list.append(Block(r.text))
-                time.sleep(0.1)
-            nonce += 1
-    """
-
-class Network:
-    network_config_url = 'https://gateway.elrond.com/network/config'
-    def networkConfig(self):
-        r = requests.get(self.network_config_url)
-        return r.json()
-
-
-
-#blocks = []
-#start_nonce = 8031939
-#for _ in range(2):
-#    resp = Block.query_block_hash_only(start_nonce)
-#    start_nonce += 1
 
 if __name__ == '__main__':
-    print('Class file. Do not run directly!')
-    exit(-1)
+    print('Helper file. Do not run directly!')
+    #exit(-1)
+    Helper.decode("ESDTTransfer@524944452d376431386539@05fd3ac726aa0d6f0b")
